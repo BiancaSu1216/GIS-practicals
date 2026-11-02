@@ -1,0 +1,11 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.DS_Store
+# data files are too big for GitHub (50 MB limit)
+prac*_data/*
+wk*/
+*.zip
+.httr-oauth
+.quarto

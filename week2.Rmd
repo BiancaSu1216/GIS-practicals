@@ -1,0 +1,63 @@
+---
+title: "Week 2"
+output: html_document
+date: "2026-10-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+getwd()
+```
+
+```{r}
+A <- 1
+B <- 2
+C <- A+B
+C
+```
+
+```{r}
+ls()       # 列出当前所有对象
+rm(A)      # 删除 A
+ls()       # 再看一次，A 没了
+```
+
+```{r}
+# 创建两个向量：1 到 100，101 到 200；c() 表示合并
+Data1 <- c(1:100)
+Data2 <- c(101:200)
+# 画散点图，点为红色
+plot(Data1, Data2, col = "red")
+```
+```{r}
+# 生成 100 个正态分布的随机数
+Data3 <- rnorm(100, mean = 53, sd = 34)
+Data4 <- rnorm(100, mean = 64, sd = 14)
+plot(Data3, Data4, col = "blue")
+```
+```{r}
+df <- data.frame(Data1, Data2)
+plot(df, col = "green")
+```
+```{r}
+library(tidyverse)
+df %>% head()   # 前 6 行
+df %>% tail()   # 后 6 行
+```
+```{r}
+library(tidyverse)
+df %>% head()   # 前 6 行
+df %>% tail()   # 后 6 行
+```
+```{r}
+df <- df %>%
+  dplyr::rename(column1 = Data1, column2 = Data2)
+
+df %>% dplyr::select(column1)   # dplyr 写法
+df$column1                      # $ 写法
+df[["column1"]]                 # [[ ]] 写法
+```
+
