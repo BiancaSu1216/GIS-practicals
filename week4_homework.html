@@ -373,16 +373,21 @@ ID, not the country name).</li>
 </div>
 <div id="load-data" class="section level2">
 <h2>1. Load data</h2>
-<pre class="r"><code>library(tidyverse)
+<pre class="r"><code># packages: tidyverse (data cleaning), sf (spatial data),
+# janitor (tidy column names), countrycode (convert country codes)
+library(tidyverse)
 library(sf)
 library(janitor)
 library(countrycode)
 
+# GII table (CSV). latin1 encoding reads special letters in country names;
+# &quot;..&quot; means missing in this file, so tell R to treat it as NA
 gii &lt;- read_csv(&quot;prac4_data/HDR25_Composite_indices_complete_time_series.csv&quot;,
                 locale = locale(encoding = &quot;latin1&quot;),
                 na = c(&quot;&quot;, &quot;NA&quot;, &quot;..&quot;)) %&gt;%
   clean_names()
 
+# world country boundaries (spatial data, GeoJSON)
 world &lt;- st_read(&quot;prac4_data/World_Countries_Generalized.geojson&quot;) %&gt;%
   clean_names()</code></pre>
 <pre><code>## Reading layer `World_Countries_Generalized&#39; from data source 
@@ -396,11 +401,15 @@ world &lt;- st_read(&quot;prac4_data/World_Countries_Generalized.geojson&quot;) 
 </div>
 <div id="clean-and-calculate" class="section level2">
 <h2>2. Clean and calculate</h2>
-<pre class="r"><code>gii_clean &lt;- gii %&gt;%
+<pre class="r"><code># keep only the columns we need, then calculate the change
+# (negative gii_diff = inequality fell)
+# the map uses 2-letter codes, the CSV uses 3-letter codes, so convert them
+gii_clean &lt;- gii %&gt;%
   select(iso3, country, gii_2010, gii_2019) %&gt;%
   mutate(gii_diff = gii_2019 - gii_2010,
          iso2 = countrycode(iso3, origin = &quot;iso3c&quot;, destination = &quot;iso2c&quot;))
 
+# look at the first rows to check the result
 head(gii_clean)</code></pre>
 <pre><code>## # A tibble: 6 × 6
 ##   iso3  country             gii_2010 gii_2019 gii_diff iso2 
@@ -414,7 +423,9 @@ head(gii_clean)</code></pre>
 </div>
 <div id="join-to-world-map" class="section level2">
 <h2>3. Join to world map</h2>
-<pre class="r"><code>world_gii &lt;- world %&gt;%
+<pre class="r"><code># join the GII table to the map using the country code (unique ID, not names)
+# left_join keeps every country on the map, even if it has no GII data
+world_gii &lt;- world %&gt;%
   left_join(gii_clean, by = c(&quot;iso&quot; = &quot;iso2&quot;))
 
 # check: how many countries have no GII change value?
@@ -424,8 +435,9 @@ sum(is.na(world_gii$gii_diff))</code></pre>
 <div id="map" class="section level2">
 <h2>4. Map</h2>
 <pre class="r"><code>library(tmap)
-tmap_mode(&quot;plot&quot;)
+tmap_mode(&quot;plot&quot;)   # static map (not interactive)
 
+# diverging colours centred on 0: blue = inequality fell, red = it rose
 tm_shape(world_gii) +
   tm_polygons(fill = &quot;gii_diff&quot;,
               fill.scale = tm_scale_intervals(style = &quot;fisher&quot;, midpoint = 0,
@@ -438,7 +450,7 @@ tm_shape(world_gii) +
 ## 5. Interpretation Most countries with data saw their Gender
 Inequality Index fall between 2010 and 2019 (shown in blue), meaning
 gender inequality decreased. Only a few countries saw an increase
-(orange).</p>
+(red).</p>
 <p>Limitations: countries in grey have no GII value for 2010 or 2019, so
 the change could not be calculated. The class breaks (Fisher) also
 affect how strong the changes look on the map.</p>

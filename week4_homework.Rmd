@@ -20,30 +20,41 @@ Research question: How did gender inequality (GII) change between 2010 and 2019 
 
 ## 1. Load data
 ```{r}
+# packages: tidyverse (data cleaning), sf (spatial data),
+# janitor (tidy column names), countrycode (convert country codes)
 library(tidyverse)
 library(sf)
 library(janitor)
 library(countrycode)
 
+# GII table (CSV). latin1 encoding reads special letters in country names;
+# ".." means missing in this file, so tell R to treat it as NA
 gii <- read_csv("prac4_data/HDR25_Composite_indices_complete_time_series.csv",
                 locale = locale(encoding = "latin1"),
                 na = c("", "NA", "..")) %>%
   clean_names()
 
+# world country boundaries (spatial data, GeoJSON)
 world <- st_read("prac4_data/World_Countries_Generalized.geojson") %>%
   clean_names()
 ```
 ## 2. Clean and calculate
 ```{r}
+# keep only the columns we need, then calculate the change
+# (negative gii_diff = inequality fell)
+# the map uses 2-letter codes, the CSV uses 3-letter codes, so convert them
 gii_clean <- gii %>%
   select(iso3, country, gii_2010, gii_2019) %>%
   mutate(gii_diff = gii_2019 - gii_2010,
          iso2 = countrycode(iso3, origin = "iso3c", destination = "iso2c"))
 
+# look at the first rows to check the result
 head(gii_clean)
 ```
 ## 3. Join to world map
 ```{r}
+# join the GII table to the map using the country code (unique ID, not names)
+# left_join keeps every country on the map, even if it has no GII data
 world_gii <- world %>%
   left_join(gii_clean, by = c("iso" = "iso2"))
 
@@ -53,8 +64,9 @@ sum(is.na(world_gii$gii_diff))
 ## 4. Map
 ```{r, fig.width = 10, fig.height = 5}
 library(tmap)
-tmap_mode("plot")
+tmap_mode("plot")   # static map (not interactive)
 
+# diverging colours centred on 0: blue = inequality fell, red = it rose
 tm_shape(world_gii) +
   tm_polygons(fill = "gii_diff",
               fill.scale = tm_scale_intervals(style = "fisher", midpoint = 0,
@@ -65,6 +77,6 @@ tm_shape(world_gii) +
   tm_credits("Data: UNDP HDR 2025; Esri World Countries")
 ```
 ## 5. Interpretation
-Most countries with data saw their Gender Inequality Index fall between 2010 and 2019 (shown in blue), meaning gender inequality decreased. Only a few countries saw an increase (orange).
+Most countries with data saw their Gender Inequality Index fall between 2010 and 2019 (shown in blue), meaning gender inequality decreased. Only a few countries saw an increase (red).
 
 Limitations: countries in grey have no GII value for 2010 or 2019, so the change could not be calculated. The class breaks (Fisher) also affect how strong the changes look on the map.

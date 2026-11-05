@@ -21,6 +21,8 @@ Aim: compare hotels and Airbnb listings across London boroughs.
 
 ## 1. Load data
 ```{r}
+# packages: tidyverse (data cleaning), sf (spatial data),
+# janitor (tidy column names), tmap (maps)
 library(tidyverse)
 library(sf)
 library(janitor)
@@ -53,12 +55,16 @@ airbnb_points <- airbnb %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>%
   st_transform(27700)
 
+# check how many points are left after filtering
 nrow(hotels)
 nrow(airbnb_points)
 ```
 
 ## 3. Count per borough
 ```{r}
+# count the points inside each borough (st_intersects + lengths),
+# then divide by area (m² / 1,000,000 = km²) to get density,
+# because bigger boroughs naturally contain more points
 london_boroughs <- london_boroughs %>%
   mutate(hotel_count  = lengths(st_intersects(., hotels)),
          airbnb_count = lengths(st_intersects(., airbnb_points)),
@@ -66,6 +72,7 @@ london_boroughs <- london_boroughs %>%
          hotel_density  = hotel_count / area_km2,
          airbnb_density = airbnb_count / area_km2)
 
+# show the boroughs with the highest hotel density (table only, no geometry)
 london_boroughs %>%
   st_drop_geometry() %>%
   select(name, hotel_count, airbnb_count, hotel_density, airbnb_density) %>%
@@ -75,8 +82,9 @@ london_boroughs %>%
 
 ## 4. Maps
 ```{r, fig.width = 10, fig.height = 5}
-tmap_mode("plot")
+tmap_mode("plot")   # static map (not interactive)
 
+# map A: hotel density, jenks breaks (natural groups), 5 classes
 map_hotels <- tm_shape(london_boroughs) +
   tm_polygons(fill = "hotel_density",
               fill.scale = tm_scale_intervals(style = "jenks", n = 5, values = "brewer.bu_pu"),
@@ -85,6 +93,7 @@ map_hotels <- tm_shape(london_boroughs) +
   tm_compass(position = c("left", "bottom")) +
   tm_scalebar(position = c("left", "bottom"))
 
+# map B: Airbnb density, same style so the two maps can be compared
 map_airbnb <- tm_shape(london_boroughs) +
   tm_polygons(fill = "airbnb_density",
               fill.scale = tm_scale_intervals(style = "jenks", n = 5, values = "brewer.bu_pu"),
@@ -92,6 +101,7 @@ map_airbnb <- tm_shape(london_boroughs) +
   tm_title("B. Airbnb (whole home, all year)") +
   tm_credits("Data: OpenStreetMap; Inside Airbnb; ONS", position = c("right", "bottom"))
 
+# put the two maps side by side
 tmap_arrange(map_hotels, map_airbnb, ncol = 2)
 ```
 
@@ -112,6 +122,7 @@ uk_cities <- st_read("prac5_data/World_Cities.geojson") %>%
 # a box around London, to show where the study area is
 london_box <- st_as_sfc(st_bbox(london_boroughs))
 
+# location map: UK in grey, red box = London, dots = cities
 map_uk <- tm_shape(uk_outline) +
   tm_polygons(fill = "grey90") +
   tm_shape(london_box) +
@@ -120,10 +131,13 @@ map_uk <- tm_shape(uk_outline) +
   tm_dots(size = 0.3) +
   tm_text("city_name", size = 0.6, ymod = -0.6)
 
+# combine all three maps (London maps wider than the UK map)
 final_map <- tmap_arrange(map_hotels, map_airbnb, map_uk,
                           ncol = 3, widths = c(0.4, 0.4, 0.2))
 final_map
 
+# save the final map as a 300 dpi image
+# (png opens the file, print draws the map, dev.off closes and saves it)
 png("week5_map.png", width = 12, height = 6, units = "in", res = 300)
 print(final_map)
 dev.off()
