@@ -1,0 +1,136 @@
+---
+title: "week 5 practical"
+output: html_document
+date: "2026-11-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## 0. Analysis plan
+
+Aim: compare hotels and Airbnb listings across London boroughs.
+
+1. Load the data: London boroughs (shp), OSM points of interest (shp), Airbnb listings (csv), UK outline and world cities (for the location map).
+2. Set every layer to British National Grid (EPSG:27700), so they line up.
+3. Filter: keep only hotels from OSM, and only whole-home Airbnbs available all year (comparable to hotels).
+4. Spatial join: count how many hotels and Airbnbs fall in each borough.
+5. Normalise the counts (per km²), because larger boroughs naturally contain more points.
+6. Map: two maps side by side (A hotels, B Airbnb), a UK location map, legend, north arrow, scale bar and data source.
+
+## 1. Load data
+```{r}
+library(tidyverse)
+library(sf)
+library(janitor)
+library(tmap)
+
+# London boroughs (already in British National Grid)
+london_boroughs <- st_read("prac5_data/statistical-gis-boundaries-london/ESRI/London_Borough_Excluding_MHW.shp") %>%
+  clean_names() %>%
+  st_transform(27700)
+
+# OSM points of interest (shops, hotels, cafes...)
+osm <- st_read("prac5_data/greater-london-latest-free.shp/gis_osm_pois_free_1.shp") %>%
+  clean_names() %>%
+  st_transform(27700)
+
+# Airbnb listings (a normal table with longitude/latitude columns)
+airbnb <- read_csv("prac5_data/listings.csv") %>%
+  clean_names()
+```
+
+## 2. Filter
+```{r}
+# keep only hotels from OSM
+hotels <- osm %>%
+  filter(fclass == "hotel")
+
+# keep whole homes available all year, then turn the table into points
+airbnb_points <- airbnb %>%
+  filter(room_type == "Entire home/apt" & availability_365 == 365) %>%
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>%
+  st_transform(27700)
+
+nrow(hotels)
+nrow(airbnb_points)
+```
+
+## 3. Count per borough
+```{r}
+london_boroughs <- london_boroughs %>%
+  mutate(hotel_count  = lengths(st_intersects(., hotels)),
+         airbnb_count = lengths(st_intersects(., airbnb_points)),
+         area_km2     = as.numeric(st_area(.)) / 1000000,
+         hotel_density  = hotel_count / area_km2,
+         airbnb_density = airbnb_count / area_km2)
+
+london_boroughs %>%
+  st_drop_geometry() %>%
+  select(name, hotel_count, airbnb_count, hotel_density, airbnb_density) %>%
+  arrange(desc(hotel_density)) %>%
+  head()
+```
+
+## 4. Maps
+```{r, fig.width = 10, fig.height = 5}
+tmap_mode("plot")
+
+map_hotels <- tm_shape(london_boroughs) +
+  tm_polygons(fill = "hotel_density",
+              fill.scale = tm_scale_intervals(style = "jenks", n = 5, values = "brewer.bu_pu"),
+              fill.legend = tm_legend(title = "Hotels per km²")) +
+  tm_title("A. Hotels") +
+  tm_compass(position = c("left", "bottom")) +
+  tm_scalebar(position = c("left", "bottom"))
+
+map_airbnb <- tm_shape(london_boroughs) +
+  tm_polygons(fill = "airbnb_density",
+              fill.scale = tm_scale_intervals(style = "jenks", n = 5, values = "brewer.bu_pu"),
+              fill.legend = tm_legend(title = "Airbnbs per km²")) +
+  tm_title("B. Airbnb (whole home, all year)") +
+  tm_credits("Data: OpenStreetMap; Inside Airbnb; ONS", position = c("right", "bottom"))
+
+tmap_arrange(map_hotels, map_airbnb, ncol = 2)
+```
+
+## 5. Location map
+```{r, fig.width = 12, fig.height = 6}
+# UK outline (simplified so it draws faster)
+uk_outline <- st_read("prac5_data/gadm41_GBR_shp/gadm41_GBR_0.shp") %>%
+  st_transform(27700) %>%
+  st_simplify(dTolerance = 1000)
+
+# a few UK cities for reference
+uk_cities <- st_read("prac5_data/World_Cities.geojson") %>%
+  clean_names() %>%
+  filter(cntry_name == "United Kingdom",
+         city_name %in% c("London", "Edinburgh", "Cardiff", "Belfast", "Manchester")) %>%
+  st_transform(27700)
+
+# a box around London, to show where the study area is
+london_box <- st_as_sfc(st_bbox(london_boroughs))
+
+map_uk <- tm_shape(uk_outline) +
+  tm_polygons(fill = "grey90") +
+  tm_shape(london_box) +
+  tm_borders(col = "red", lwd = 2) +
+  tm_shape(uk_cities) +
+  tm_dots(size = 0.3) +
+  tm_text("city_name", size = 0.6, ymod = -0.6)
+
+final_map <- tmap_arrange(map_hotels, map_airbnb, map_uk,
+                          ncol = 3, widths = c(0.4, 0.4, 0.2))
+final_map
+
+png("week5_map.png", width = 12, height = 6, units = "in", res = 300)
+print(final_map)
+dev.off()
+```
+
+## 6. Interpretation
+
+Both maps show the same core pattern: hotels and whole-home Airbnb listings are concentrated in central London (Westminster, Camden, City of London) and become much less dense towards the outer boroughs. However, Airbnb is far more common: there are about 2,363 full-year whole-home listings compared with 367 hotels, and the highest Airbnb density (about 23 per km²) is almost four times the highest hotel density (about 6.5 per km²). Airbnb also spreads further east, into boroughs such as Tower Hamlets and Hackney, where there are few hotels. This suggests short-term lets reach residential areas that the hotel industry does not.
+
+Limitations: boroughs are large and arbitrary units, so the pattern could change with smaller areas (the modifiable areal unit problem). OpenStreetMap hotel data is volunteered and may be incomplete, and Inside Airbnb is a snapshot that does not show whether a listing is actually booked.
