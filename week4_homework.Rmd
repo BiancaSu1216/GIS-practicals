@@ -1,0 +1,70 @@
+---
+title: "week 4 homework"
+output: html_document
+date: "2026-11-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+## 0. Analysis plan
+
+Research question: How did gender inequality (GII) change between 2010 and 2019 across the world?
+
+1. Load the UNDP HDR composite indices (CSV) and world country boundaries (GeoJSON).
+2. Keep the country code and GII for 2010 and 2019, and calculate the change (2019 minus 2010). A negative value means inequality fell.
+3. Convert the 3-letter country codes to 2-letter codes with `countrycode`, so they match the map.
+4. Join the GII table to the world map using the country code (a unique ID, not the country name).
+5. Map the change with a diverging colour scheme centred on 0.
+
+## 1. Load data
+```{r}
+library(tidyverse)
+library(sf)
+library(janitor)
+library(countrycode)
+
+gii <- read_csv("prac4_data/HDR25_Composite_indices_complete_time_series.csv",
+                locale = locale(encoding = "latin1"),
+                na = c("", "NA", "..")) %>%
+  clean_names()
+
+world <- st_read("prac4_data/World_Countries_Generalized.geojson") %>%
+  clean_names()
+```
+## 2. Clean and calculate
+```{r}
+gii_clean <- gii %>%
+  select(iso3, country, gii_2010, gii_2019) %>%
+  mutate(gii_diff = gii_2019 - gii_2010,
+         iso2 = countrycode(iso3, origin = "iso3c", destination = "iso2c"))
+
+head(gii_clean)
+```
+## 3. Join to world map
+```{r}
+world_gii <- world %>%
+  left_join(gii_clean, by = c("iso" = "iso2"))
+
+# check: how many countries have no GII change value?
+sum(is.na(world_gii$gii_diff))
+```
+## 4. Map
+```{r, fig.width = 10, fig.height = 5}
+library(tmap)
+tmap_mode("plot")
+
+tm_shape(world_gii) +
+  tm_polygons(fill = "gii_diff",
+              fill.scale = tm_scale_intervals(style = "fisher", midpoint = 0,
+                                              values = "-brewer.rd_bu"),
+              fill.legend = tm_legend(title = "GII change\n2010-2019",
+                                      position = tm_pos_out("right", "center"))) +
+  tm_title("Change in Gender Inequality Index, 2010-2019") +
+  tm_credits("Data: UNDP HDR 2025; Esri World Countries")
+```
+## 5. Interpretation
+Most countries with data saw their Gender Inequality Index fall between 2010 and 2019 (shown in blue), meaning gender inequality decreased. Only a few countries saw an increase (orange).
+
+Limitations: countries in grey have no GII value for 2010 or 2019, so the change could not be calculated. The class breaks (Fisher) also affect how strong the changes look on the map.
