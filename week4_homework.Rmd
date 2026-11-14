@@ -29,13 +29,13 @@ library(countrycode)
 
 # GII table (CSV). latin1 encoding reads special letters in country names;
 # ".." means missing in this file, so tell R to treat it as NA
-gii <- read_csv("prac4_data/HDR25_Composite_indices_complete_time_series.csv",
+gii <- read_csv("data/HDR25_Composite_indices_complete_time_series.csv",
                 locale = locale(encoding = "latin1"),
                 na = c("", "NA", "..")) %>%
   clean_names()
 
 # world country boundaries (spatial data, GeoJSON)
-world <- st_read("prac4_data/World_Countries_Generalized.geojson") %>%
+world <- st_read("data/World_Countries_(Generalized)_8414823838130214587.gpkg") %>%
   clean_names()
 ```
 ## 2. Clean and calculate
@@ -62,15 +62,15 @@ world_gii <- world %>%
 sum(is.na(world_gii$gii_diff))
 ```
 ## 4. Map
-```{r, fig.width = 10, fig.height = 5}
+```{r, fig.width = 7, fig.height = 5}
 library(tmap)
 tmap_mode("plot")   # static map (not interactive)
 
 # diverging colours centred on 0: blue = inequality fell, red = it rose
 tm_shape(world_gii) +
   tm_polygons(fill = "gii_diff",
-              fill.scale = tm_scale_intervals(style = "fisher", midpoint = 0,
-                                              values = "-brewer.rd_bu"),
+              fill.scale = tm_scale_intervals(style = "jenks", midpoint = 0,
+                                              values = "gmt.polar"),
               fill.legend = tm_legend(title = "GII change\n2010-2019",
                                       position = tm_pos_out("right", "center"))) +
   tm_title("Change in Gender Inequality Index, 2010-2019") +
